@@ -9,8 +9,12 @@ export const sampleWardrobeItems: WardrobeItem[] = [
     color: 'White',
     colorHex: '#FFFFFF',
     imageUrl: '/wardrobe/white-tshirt.svg',
+    occasion: ['casual', 'sporty'],
+    priceSGD: 25,
     usageCount: 15,
     lastWorn: '2024-01-15',
+    isFavorite: true,
+    aiExtracted: false,
     createdAt: '2024-01-01',
   },
   {
@@ -20,8 +24,12 @@ export const sampleWardrobeItems: WardrobeItem[] = [
     color: 'Navy Blue',
     colorHex: '#000080',
     imageUrl: '/wardrobe/navy-blazer.svg',
+    occasion: ['formal', 'business'],
+    priceSGD: 150,
     usageCount: 8,
     lastWorn: '2024-01-14',
+    isFavorite: true,
+    aiExtracted: false,
     createdAt: '2024-01-01',
   },
   {
@@ -31,8 +39,12 @@ export const sampleWardrobeItems: WardrobeItem[] = [
     color: 'Black',
     colorHex: '#000000',
     imageUrl: '/wardrobe/black-jeans.svg',
+    occasion: ['casual', 'streetwear'],
+    priceSGD: 80,
     usageCount: 20,
     lastWorn: '2024-01-15',
+    isFavorite: false,
+    aiExtracted: false,
     createdAt: '2024-01-01',
   },
   {
@@ -42,8 +54,12 @@ export const sampleWardrobeItems: WardrobeItem[] = [
     color: 'Brown',
     colorHex: '#8B4513',
     imageUrl: '/wardrobe/brown-shoes.svg',
+    occasion: ['formal', 'business', 'casual'],
+    priceSGD: 200,
     usageCount: 12,
     lastWorn: '2024-01-14',
+    isFavorite: false,
+    aiExtracted: false,
     createdAt: '2024-01-01',
   },
   {
@@ -53,8 +69,12 @@ export const sampleWardrobeItems: WardrobeItem[] = [
     color: 'Grey',
     colorHex: '#808080',
     imageUrl: '/wardrobe/grey-hoodie.svg',
+    occasion: ['casual', 'sporty'],
+    priceSGD: 45,
     usageCount: 10,
     lastWorn: '2024-01-13',
+    isFavorite: false,
+    aiExtracted: false,
     createdAt: '2024-01-01',
   },
   {
@@ -64,8 +84,12 @@ export const sampleWardrobeItems: WardrobeItem[] = [
     color: 'Khaki',
     colorHex: '#C3B091',
     imageUrl: '/wardrobe/khaki-chinos.svg',
+    occasion: ['casual', 'business'],
+    priceSGD: 60,
     usageCount: 7,
     lastWorn: '2024-01-12',
+    isFavorite: false,
+    aiExtracted: false,
     createdAt: '2024-01-01',
   },
   {
@@ -75,8 +99,12 @@ export const sampleWardrobeItems: WardrobeItem[] = [
     color: 'Red',
     colorHex: '#FF0000',
     imageUrl: '/wardrobe/red-sneakers.svg',
+    occasion: ['casual', 'sporty'],
+    priceSGD: 120,
     usageCount: 5,
     lastWorn: '2024-01-11',
+    isFavorite: false,
+    aiExtracted: false,
     createdAt: '2024-01-01',
   },
   {
@@ -86,8 +114,12 @@ export const sampleWardrobeItems: WardrobeItem[] = [
     color: 'Silver',
     colorHex: '#C0C0C0',
     imageUrl: '/wardrobe/silver-watch.svg',
+    occasion: ['formal', 'business', 'casual'],
+    priceSGD: 300,
     usageCount: 18,
     lastWorn: '2024-01-15',
+    isFavorite: true,
+    aiExtracted: false,
     createdAt: '2024-01-01',
   },
   {
@@ -97,8 +129,12 @@ export const sampleWardrobeItems: WardrobeItem[] = [
     color: 'Blue',
     colorHex: '#4169E1',
     imageUrl: '/wardrobe/denim-jacket.svg',
+    occasion: ['casual', 'streetwear'],
+    priceSGD: 90,
     usageCount: 6,
     lastWorn: '2024-01-10',
+    isFavorite: false,
+    aiExtracted: false,
     createdAt: '2024-01-01',
   },
   {
@@ -108,8 +144,12 @@ export const sampleWardrobeItems: WardrobeItem[] = [
     color: 'Blue/White',
     colorHex: '#87CEEB',
     imageUrl: '/wardrobe/striped-polo.svg',
+    occasion: ['casual', 'business'],
+    priceSGD: 40,
     usageCount: 4,
     lastWorn: '2024-01-09',
+    isFavorite: false,
+    aiExtracted: false,
     createdAt: '2024-01-01',
   },
 ];
@@ -124,7 +164,7 @@ export function generateId(): string {
 
 export function calculateColorTrends(items: WardrobeItem[]): ColorTrend[] {
   const colorMap = new Map<string, { colorHex: string; count: number }>();
-  
+
   items.forEach(item => {
     const existing = colorMap.get(item.color);
     if (existing) {
@@ -147,7 +187,7 @@ export function calculateColorTrends(items: WardrobeItem[]): ColorTrend[] {
 
 export function calculateCategoryUsage(items: WardrobeItem[]): CategoryUsage[] {
   const categoryMap = new Map<string, number>();
-  
+
   items.forEach(item => {
     const existing = categoryMap.get(item.category) || 0;
     categoryMap.set(item.category, existing + 1);

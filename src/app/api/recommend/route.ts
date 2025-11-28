@@ -59,20 +59,20 @@ async function generateOutfitRecommendations(
 
   // Generate combinations
   const combinations: WardrobeItem[][] = [];
-  
+
   // Basic combination: top + bottom + shoes
   tops.forEach(top => {
     bottoms.forEach(bottom => {
       shoes.forEach(shoe => {
         combinations.push([top, bottom, shoe]);
-        
+
         // Add accessory if available
         if (accessories.length > 0) {
           accessories.forEach(acc => {
             combinations.push([top, bottom, shoe, acc]);
           });
         }
-        
+
         // Add outerwear for formal occasions
         if (occasion === 'formal' || occasion === 'business') {
           outerwear.forEach(outer => {
@@ -88,13 +88,58 @@ async function generateOutfitRecommendations(
     });
   });
 
-  // Score and filter combinations
+  // Create outfits with reasoning
   combinations.forEach((combo, index) => {
-    let score = 50; // Base score
     const reasons: string[] = [];
 
-    // Color harmony scoring
+    // Color harmony
     const colors = combo.map(item => item.color);
+    const hasHarmoniousColors = colors.some((color, i) => {
+      const harmonious = colorHarmonyRules[color] || [];
+      return colors.some((otherColor, j) => i !== j && harmonious.includes(otherColor));
+    });
+    if (hasHarmoniousColors) {
+      reasons.push('The colors complement each other beautifully');
+    }
+
+    // Occasion preference
+    const hasPreferredColors = combo.some(item => prefs.colors.includes(item.color));
+    if (hasPreferredColors) {
+      reasons.push(`Colors match ${occasion} style`);
+    }
+
+    // Variety bonus
+    const uniqueCategories = new Set(combo.map(item => item.category)).size;
+    if (uniqueCategories >= 3) {
+      reasons.push('Good variety of item types');
+    }
+
+    // Usage-based (prefer less worn items for freshness)
+    const avgUsage = combo.reduce((sum, item) => sum + (item.usageCount || 0), 0) / combo.length;
+    if (avgUsage < 10) {
+      reasons.push('Fresh combination with less-worn items');
+    }
+
+    if (reasons.length === 0) {
+      reasons.push('Basic matching outfit');
+    }
+
+    outfits.push({
+      id: `outfit-${index + 1}`,
+      items: combo,
+      occasion,
+      reasoning: reasons.join('. ') + '.',
+      createdAt: new Date().toISOString(),
+    });
+  });
+
+  // Helper function to score outfits
+  function scoreOutfit(items: WardrobeItem[], occasion: string): number {
+    let score = 50;
+    const prefs = occasionPreferences[occasion] || occasionPreferences.casual;
+
+    // Color harmony scoring
+    const colors = items.map(item => item.color);
     colors.forEach((color, i) => {
       const harmonious = colorHarmonyRules[color] || [];
       colors.forEach((otherColor, j) => {
@@ -105,53 +150,35 @@ async function generateOutfitRecommendations(
     });
 
     // Occasion preference scoring
-    const hasPreferredColors = combo.some(item => prefs.colors.includes(item.color));
+    const hasPreferredColors = items.some(item => prefs.colors.includes(item.color));
     if (hasPreferredColors) {
       score += 15;
-      reasons.push(`Colors match ${occasion} style`);
     }
 
     // Variety bonus
-    const uniqueCategories = new Set(combo.map(item => item.category)).size;
+    const uniqueCategories = new Set(items.map(item => item.category)).size;
     if (uniqueCategories >= 3) {
       score += 10;
-      reasons.push('Good variety of item types');
     }
 
-    // Usage-based scoring (prefer less worn items for freshness)
-    const avgUsage = combo.reduce((sum, item) => sum + item.usageCount, 0) / combo.length;
-    if (avgUsage < 10) {
-      score += 5;
-      reasons.push('Fresh combination with less-worn items');
-    }
+    return Math.min(100, score);
+  }
 
-    // Cap score at 100
-    score = Math.min(100, score);
+  // Score outfits and sort by score, then return top 5
+  const scoredOutfits = outfits.map(outfit => ({
+    outfit,
+    score: scoreOutfit(outfit.items, occasion),
+  }));
 
-    if (reasons.length === 0) {
-      reasons.push('Basic matching outfit');
-    }
+  scoredOutfits.sort((a, b) => b.score - a.score);
 
-    outfits.push({
-      id: `outfit-${index + 1}`,
-      items: combo,
-      occasion,
-      score,
-      reasoning: reasons.join('. ') + '.',
-      createdAt: new Date().toISOString(),
-    });
-  });
-
-  // Sort by score and return top 5
-  return outfits
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 5);
+  return scoredOutfits.slice(0, 5).map(({ outfit }) => outfit);
 }
 
 // Optional: Call Hugging Face API for text-based reasoning
 async function enhanceWithHuggingFace(outfit: Outfit): Promise<string> {
   const apiKey = process.env.HUGGINGFACE_API_KEY;
-  
+
   if (!apiKey) {
     return outfit.reasoning;
   }

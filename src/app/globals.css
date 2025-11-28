@@ -25,6 +25,64 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* iPhone 16 size constraint for desktop */
+@media (min-width: 768px) {
+  body {
+    max-width: 393px;
+    /* iPhone 16 width */
+    margin: 0 auto;
+    position: relative;
+    min-height: 100vh;
+    background: var(--background);
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.1);
+    /* Optional: visual boundary */
+  }
+
+  /* Constrain fixed header and navigation to iPhone 16 width */
+  header[class*="fixed"],
+  nav[class*="fixed"] {
+    width: 393px;
+    left: 50%;
+    margin-left: -196.5px;
+    right: auto;
+  }
+
+  /* Constrain floating chatbot button to iPhone 16 width */
+  button[class*="fixed"][class*="bottom-20"][class*="right-4"] {
+    right: calc((100% - 393px) / 2 + 16px) !important;
+  }
+
+  /* Constrain AI Stylist modal to iPhone 16 width and height */
+  div[class*="fixed"][class*="inset-0"][class*="bg-black"] {
+    width: 393px !important;
+    left: 50% !important;
+    margin-left: -196.5px !important;
+    right: auto !important;
+    top: 0 !important;
+    bottom: 0 !important;
+    height: 100vh !important;
+    max-height: 100vh !important;
+    overflow: hidden !important;
+  }
+
+  /* Ensure modal content uses proper layout */
+  div[class*="fixed"][class*="inset-0"][class*="bg-black"]>div {
+    width: 100% !important;
+    height: 100% !important;
+    max-height: 100vh !important;
+    display: flex !important;
+    flex-direction: column !important;
+    border-radius: 0 !important;
+  }
+
+  /* Make sure input field is visible and properly sized */
+  div[class*="fixed"][class*="inset-0"][class*="bg-black"] input[type="text"] {
+    width: 100% !important;
+    max-width: none !important;
+    flex: 1 !important;
+  }
+}
+
 /* Mobile-first safe area padding for iOS */
 .safe-area-pb {
   padding-bottom: env(safe-area-inset-bottom, 0px);
@@ -51,6 +109,7 @@ html {
     opacity: 0;
     transform: translateY(10px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -63,7 +122,9 @@ html {
 
 /* Touch-friendly tap highlights */
 @media (hover: none) {
-  button, a {
+
+  button,
+  a {
     -webkit-tap-highlight-color: rgba(124, 58, 237, 0.1);
   }
 }

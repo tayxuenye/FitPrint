@@ -1,12 +1,14 @@
 'use client';
 
 import { WardrobeItem } from '@/types';
+import { toggleFavorite } from '@/lib/storage';
 
 interface WardrobeItemCardProps {
   item: WardrobeItem;
   isSelected?: boolean;
   onSelect?: (item: WardrobeItem) => void;
   showUsage?: boolean;
+  onFavoriteToggle?: () => void;
 }
 
 export default function WardrobeItemCard({
@@ -14,52 +16,133 @@ export default function WardrobeItemCard({
   isSelected = false,
   onSelect,
   showUsage = false,
+  onFavoriteToggle,
 }: WardrobeItemCardProps) {
+  const handleFavoriteClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    toggleFavorite(item.id);
+    onFavoriteToggle?.();
+  };
+
+  const formatDate = (dateString?: string) => {
+    if (!dateString) return 'Never';
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffTime = Math.abs(now.getTime() - date.getTime());
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays === 0) return 'Today';
+    if (diffDays === 1) return 'Yesterday';
+    if (diffDays < 7) return `${diffDays} days ago`;
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  };
+
+  const calculateCostPerWear = () => {
+    if (!item.priceSGD || item.usageCount === 0) return null;
+    return (item.priceSGD / item.usageCount).toFixed(2);
+  };
+
+  const costPerWear = calculateCostPerWear();
+
   return (
     <div
       onClick={() => onSelect?.(item)}
-      className={`relative rounded-xl overflow-hidden bg-zinc-100 dark:bg-zinc-800 cursor-pointer transition-all duration-200 ${
-        isSelected
-          ? 'ring-2 ring-purple-500 ring-offset-2 dark:ring-offset-zinc-900 scale-95'
-          : 'hover:scale-105'
-      }`}
+      className={`relative rounded-xl overflow-hidden bg-white dark:bg-zinc-800 cursor-pointer transition-all duration-200 border border-zinc-200 dark:border-zinc-700 ${isSelected
+        ? 'ring-2 ring-purple-500 ring-offset-2 dark:ring-offset-zinc-900 scale-95'
+        : 'hover:scale-105'
+        }`}
     >
-      {/* Color swatch as placeholder for image */}
+      {/* Favorite Heart Icon */}
+      <button
+        onClick={handleFavoriteClick}
+        className="absolute top-2 left-2 z-10 p-1.5 rounded-full bg-white/80 dark:bg-zinc-900/80 backdrop-blur-sm hover:bg-white dark:hover:bg-zinc-800 transition-colors"
+        aria-label={item.isFavorite ? 'Remove from favorites' : 'Add to favorites'}
+      >
+        <svg
+          className={`w-5 h-5 transition-colors ${item.isFavorite
+            ? 'text-red-500 fill-red-500'
+            : 'text-zinc-400 dark:text-zinc-500'
+            }`}
+          fill={item.isFavorite ? 'currentColor' : 'none'}
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
+          />
+        </svg>
+      </button>
+
+      {/* Image or Color Swatch */}
       <div
-        className="aspect-square flex items-center justify-center"
+        className="aspect-square flex items-center justify-center relative"
         style={{ backgroundColor: item.colorHex }}
       >
-        <div className="text-center p-2">
-          <span className="text-3xl">
-            {item.category === 'tops' && '👕'}
-            {item.category === 'bottoms' && '👖'}
-            {item.category === 'shoes' && '👟'}
-            {item.category === 'accessories' && '⌚'}
-            {item.category === 'outerwear' && '🧥'}
-          </span>
-        </div>
+        {item.imageUrl ? (
+          <img
+            src={item.imageUrl}
+            alt={item.name}
+            className="w-full h-full object-cover"
+            onError={(e) => {
+              // Fallback to emoji if image fails to load
+              const target = e.target as HTMLImageElement;
+              target.style.display = 'none';
+              if (target.parentElement) {
+                target.parentElement.innerHTML = `
+                  <div class="text-center p-2">
+                    <span class="text-3xl">
+                      ${item.category === 'tops' ? '👕' : ''}
+                      ${item.category === 'bottoms' ? '👖' : ''}
+                      ${item.category === 'shoes' ? '👟' : ''}
+                      ${item.category === 'accessories' ? '⌚' : ''}
+                      ${item.category === 'outerwear' ? '🧥' : ''}
+                      ${item.category === 'dresses' ? '👗' : ''}
+                    </span>
+                  </div>
+                `;
+              }
+            }}
+          />
+        ) : (
+          <div className="text-center p-2">
+            <span className="text-3xl">
+              {item.category === 'tops' && '👕'}
+              {item.category === 'bottoms' && '👖'}
+              {item.category === 'shoes' && '👟'}
+              {item.category === 'accessories' && '⌚'}
+              {item.category === 'outerwear' && '🧥'}
+              {item.category === 'dresses' && '👗'}
+            </span>
+          </div>
+        )}
       </div>
-      
+
       <div className="p-2">
         <h3 className="text-sm font-medium text-zinc-900 dark:text-white truncate">
           {item.name}
         </h3>
         <div className="flex items-center gap-1 mt-1">
-          <div
-            className="w-3 h-3 rounded-full border border-zinc-300"
-            style={{ backgroundColor: item.colorHex }}
-          />
-          <span className="text-xs text-zinc-500 dark:text-zinc-400">
-            {item.color}
+          <span className="text-xs px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300 capitalize">
+            {item.category}
           </span>
         </div>
         {showUsage && (
-          <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-1">
-            Worn {item.usageCount}x
-          </p>
+          <>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
+              Last worn: {formatDate(item.lastWorn)}
+            </p>
+            {costPerWear && (
+              <p className="text-xs font-medium text-purple-600 dark:text-purple-400 mt-0.5">
+                ${costPerWear} SGD per wear
+              </p>
+            )}
+          </>
         )}
       </div>
-      
+
       {isSelected && (
         <div className="absolute top-2 right-2 bg-purple-500 text-white rounded-full w-6 h-6 flex items-center justify-center">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
