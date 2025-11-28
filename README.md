@@ -11,7 +11,7 @@ AI-powered digital wardrobe and styling platform
 
 ## Tech Stack
 
-- **Frontend**: Next.js 15 with React 19
+- **Frontend**: Next.js 16 with React 19
 - **Styling**: Tailwind CSS 4
 - **Backend**: Next.js API Routes
 - **AI Integration**: Hugging Face API (optional)

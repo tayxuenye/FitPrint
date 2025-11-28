@@ -182,8 +182,9 @@ async function enhanceWithHuggingFace(outfit: Outfit): Promise<string> {
         return result[0].generated_text;
       }
     }
-  } catch {
-    // Fallback to original reasoning if API fails
+  } catch (error) {
+    // Log error for debugging but fallback to original reasoning
+    console.warn('Hugging Face API unavailable, using fallback reasoning:', error);
   }
 
   return outfit.reasoning;
@@ -212,7 +213,8 @@ export async function POST(request: NextRequest) {
     );
 
     return NextResponse.json({ outfits: enhancedOutfits });
-  } catch {
+  } catch (error) {
+    console.error('Error generating recommendations:', error);
     return NextResponse.json(
       { error: 'Failed to generate recommendations' },
       { status: 500 }
