@@ -34,26 +34,123 @@ class GenerateResponseResponse(BaseModel):
     reasoning: Optional[str] = None
     ai_used: bool = False  # Indicates if AI was used or fallback
 
-# Initialize GPT4All model (lazy loading)
+# Initialize GPT4All model (pre-load at startup)
 gpt4all_model = None
+model_load_error = None
 
-def get_model():
-    """Lazy load GPT4All model on first use"""
-    global gpt4all_model
-    if gpt4all_model is None:
+def load_model_at_startup():
+    """Pre-load GPT4All model at server startup"""
+    global gpt4all_model, model_load_error
+    if gpt4all_model is None and model_load_error is None:
         try:
             from gpt4all import GPT4All
-            print("Loading GPT4All-J model... This may take a moment on first use.")
-            print("Model will be downloaded automatically (~4GB) on first use.")
-            # Use GPT4All-J model - faster and smaller than Mistral
-            # The model will be downloaded to ~/.local/share/gpt4all/ on first use
-            gpt4all_model = GPT4All("ggml-gpt4all-j", device="cpu")
-            print("GPT4All model loaded successfully!")
+            print("=" * 60)
+            print("Loading GPT4All model... This may take a moment on first use.")
+            print("Model will be downloaded automatically on first use.")
+            print("=" * 60)
+            
+            # Try to list available models first (GPT4All v2.6.0+)
+            available_model_names = []
+            try:
+                available_models = GPT4All.list_models()
+                # Extract model names from dict/list (handle both formats)
+                if available_models:
+                    if isinstance(available_models[0], dict):
+                        available_model_names = [m.get('filename', m.get('name', str(m))) for m in available_models[:10]]
+                    else:
+                        available_model_names = [str(m) for m in available_models[:10]]
+                    print(f"📋 Found {len(available_model_names)} available models")
+                    print(f"📋 Sample models: {available_model_names[:3]}")
+            except Exception as list_error:
+                print(f"⚠️ Could not list models: {list_error}")
+                available_model_names = []
+            
+            # Try different model name formats (GPT4All v2.6.0+ uses different names)
+            # Prioritize smaller/faster models - orca-mini-3b is fast and good quality
+            model_names = [
+                "orca-mini-3b-gguf2-q4_0.gguf",       # Orca Mini (smaller, faster) - RECOMMENDED
+                "orca-mini-3b-gguf",                  # Alternative format
+                "mistral-7b-openorca.Q4_0.gguf",      # Mistral (larger but better quality)
+                "gpt4all-falcon-newbpe-q4_0.gguf",    # Falcon (balanced)
+                "ggml-gpt4all-j-v1.3-groovy",         # GPT4All-J (original request)
+                "gpt4all-j-v1.3-groovy",              # Alternative format
+                "ggml-gpt4all-j",                     # Original name
+            ]
+            
+            # If we got a list of available models, prioritize those that match
+            if available_model_names:
+                # Extract just the base names for matching (ensure all are strings)
+                available_basenames = []
+                for name in available_model_names:
+                    name_str = str(name).split('/')[-1].lower() if name else ""
+                    if name_str:
+                        available_basenames.append(name_str)
+                
+                # Prioritize models that are in the available list
+                prioritized = []
+                remaining = []
+                for m in model_names:
+                    m_lower = m.lower()
+                    if any(m_lower in bn or bn in m_lower for bn in available_basenames):
+                        prioritized.append(m)
+                    else:
+                        remaining.append(m)
+                model_names = prioritized + remaining
+            
+            model_loaded = False
+            last_error = None
+            
+            for model_name in model_names:
+                try:
+                    print(f"🔄 Trying model: {model_name}")
+                    # The model will be downloaded to ~/.local/share/gpt4all/ on first use
+                    gpt4all_model = GPT4All(model_name, device="cpu")
+                    print("=" * 60)
+                    print(f"✅ GPT4All model '{model_name}' loaded successfully!")
+                    print("=" * 60)
+                    model_loaded = True
+                    break
+                except Exception as model_error:
+                    error_str = str(model_error)
+                    print(f"⚠️ Failed to load '{model_name}': {error_str[:150]}")
+                    last_error = model_error
+                    gpt4all_model = None
+                    continue
+            
+            if not model_loaded:
+                raise Exception(f"Failed to load any GPT4All model. Last error: {last_error}")
+        except ImportError as e:
+            error_msg = f"GPT4All library not installed: {e}"
+            print(f"❌ {error_msg}")
+            print("💡 Install with: pip install gpt4all")
+            model_load_error = error_msg
         except Exception as e:
-            print(f"Error loading GPT4All: {e}")
-            print("Falling back to rule-based responses")
-            gpt4all_model = None  # Keep as None if failed
+            error_msg = f"Error loading GPT4All model: {e}"
+            print(f"❌ {error_msg}")
+            print("💡 Check if model name is correct and internet connection is available for download")
+            import traceback
+            traceback.print_exc()
+            model_load_error = error_msg
+    elif model_load_error:
+        print(f"⚠️ Model load error (cached): {model_load_error}")
     return gpt4all_model
+
+def get_model():
+    """Get the pre-loaded model (returns None if not loaded)"""
+    return gpt4all_model
+
+@app.on_event("startup")
+async def startup_event():
+    """Pre-load model when server starts"""
+    print("\n" + "=" * 60)
+    print("🚀 Server starting - loading AI model...")
+    print("=" * 60)
+    load_model_at_startup()
+    if gpt4all_model:
+        print("✅ Model pre-loaded! Server ready to handle requests.")
+    else:
+        print("⚠️ Model failed to load - will use rule-based fallbacks")
+    print("=" * 60 + "\n")
 
 @app.get("/")
 def read_root():
@@ -61,7 +158,35 @@ def read_root():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy"}
+    print("🔍 Health check called - checking model status...")
+    model = get_model()
+    status = {
+        "status": "healthy",
+        "model_loaded": model is not None,
+        "model_error": model_load_error if model is None else None
+    }
+    print(f"📊 Health status: {status}")
+    return status
+
+@app.get("/test-model")
+def test_model():
+    """Test endpoint to force model loading and see output"""
+    print("\n" + "=" * 60)
+    print("🧪 TEST MODEL ENDPOINT CALLED")
+    print("=" * 60)
+    model = get_model()
+    if model:
+        return {
+            "status": "success",
+            "message": "Model loaded successfully!",
+            "model_type": str(type(model))
+        }
+    else:
+        return {
+            "status": "failed",
+            "message": "Model failed to load",
+            "error": model_load_error
+        }
 
 @app.post("/generate-response", response_model=GenerateResponseResponse)
 async def generate_response(request: GenerateResponseRequest):
@@ -71,7 +196,8 @@ async def generate_response(request: GenerateResponseRequest):
         
         if model is None:
             # Fallback to rule-based response
-            print("⚠️ GPT4All model not available - using rule-based fallback")
+            error_info = f" (Error: {model_load_error})" if model_load_error else ""
+            print(f"⚠️ GPT4All model not available - using rule-based fallback{error_info}")
             occasion_context = request.occasion or "casual"
             return GenerateResponseResponse(
                 message=f"Perfect! I've curated {len(request.outfitDescriptions)} stylish outfit{'s' if len(request.outfitDescriptions) > 1 else ''} for your {occasion_context}. Each combination is carefully selected from your wardrobe to help you look your best!",
@@ -95,27 +221,39 @@ async def generate_response(request: GenerateResponseRequest):
         elif is_hot:
             weather_context = " The user mentioned feeling hot, so emphasize lightweight and breathable options."
         
-        prompt = f"""As a fashion stylist, a user said: "{request.message}"
+        # Simpler, more direct prompt for orca-mini-3b
+        outfit_list = "\n".join([f"- {desc}" for desc in request.outfitDescriptions[:5]])
+        prompt = f"""User: {request.message}
 
-Their wardrobe includes: {wardrobe_desc}
+I have {len(request.outfitDescriptions)} outfit recommendations for {request.occasion or 'casual'}:
+{outfit_list}
+{weather_context}
 
-I found {len(request.outfitDescriptions)} outfit combinations for {request.occasion or 'casual'}:
-{chr(10).join([f"{i+1}. {desc}" for i, desc in enumerate(request.outfitDescriptions[:5])])}
+Provide a friendly 2-3 sentence response introducing these outfit recommendations. Be enthusiastic and helpful.
 
-Provide a friendly, enthusiastic 2-3 sentence response introducing these recommendations.{weather_context} Be conversational and helpful. Keep it concise and fashion-focused. Do not include quotes around your response."""
+Assistant:"""
 
-        # Generate response with GPT4All-J
-        print("🤖 Generating AI response with GPT4All-J...")
-        response = model.generate(
-            prompt,
-            max_tokens=100,  # Reduced for faster response
-            temp=0.7,
-            top_k=40,
-            top_p=0.9,
-            repeat_penalty=1.2,
-        )
-        
-        print(f"📝 Raw AI response: {response[:100]}...")
+        # Generate response with GPT4All
+        print("🤖 Generating AI response...")
+        print(f"📝 Prompt length: {len(prompt)} characters")
+        try:
+            # Try with different parameters for orca-mini-3b
+            response = model.generate(
+                prompt,
+                max_tokens=150,  # Increased for better responses
+                temp=0.9,  # Higher temperature for more creative responses
+                top_k=40,
+                top_p=0.95,
+                repeat_penalty=1.1,  # Lower repeat penalty
+            )
+            print(f"📝 Raw AI response (full): {repr(response)}")  # Use repr to see hidden chars
+            print(f"📏 Response length: {len(response) if response else 0}")
+            print(f"📏 Response type: {type(response)}")
+        except Exception as gen_error:
+            print(f"❌ Error during generation: {gen_error}")
+            import traceback
+            traceback.print_exc()
+            response = ""
         
         # Clean up response - remove quotes and extra whitespace
         response = response.strip()
@@ -126,12 +264,21 @@ Provide a friendly, enthusiastic 2-3 sentence response introducing these recomme
         if response.startswith("'") and response.endswith("'"):
             response = response[1:-1]
         
-        # Filter gibberish
-        gibberish_patterns = ["The first thing", "How to", "Let's talk about", "(source)", "source)"]
+        # Extract just the first sentence or paragraph (AI might generate too much)
+        # Split by newlines and take the first meaningful paragraph
+        lines = response.split('\n')
+        cleaned_lines = [line.strip() for line in lines if line.strip()]
+        if cleaned_lines:
+            # Take first 2-3 sentences that are relevant
+            response = ' '.join(cleaned_lines[:2])[:300]  # Limit to 300 chars
+        
+        # Filter gibberish (more lenient)
+        gibberish_patterns = ["The first thing", "How to", "Let's talk about", "(source)", "source)", "Wikipedia", "according to"]
         has_gibberish = any(pattern.lower() in response.lower() for pattern in gibberish_patterns)
         
-        if has_gibberish or len(response) < 20 or len(response) > 500:
-            print("⚠️ AI response filtered (gibberish/invalid) - using contextual fallback")
+        # More lenient validation - accept shorter responses
+        if has_gibberish:
+            print(f"⚠️ AI response filtered (gibberish detected): {response[:100]}")
             # Fallback with context
             occasion_context = request.occasion or "casual"
             if is_cold:
@@ -141,8 +288,13 @@ Provide a friendly, enthusiastic 2-3 sentence response introducing these recomme
             else:
                 response = f"Perfect! I've curated {len(request.outfitDescriptions)} stylish outfit{'s' if len(request.outfitDescriptions) > 1 else ''} for your {occasion_context}. Each combination is carefully selected from your wardrobe to help you look your best!"
             return GenerateResponseResponse(message=response, reasoning=None, ai_used=False)
+        elif len(response) < 10:
+            print(f"⚠️ AI response too short ({len(response)} chars) - using fallback")
+            occasion_context = request.occasion or "casual"
+            response = f"Perfect! I've curated {len(request.outfitDescriptions)} stylish outfit{'s' if len(request.outfitDescriptions) > 1 else ''} for your {occasion_context}. Each combination is carefully selected from your wardrobe to help you look your best!"
+            return GenerateResponseResponse(message=response, reasoning=None, ai_used=False)
         else:
-            print("✅ AI response accepted and cleaned")
+            print(f"✅ AI response accepted: {response[:100]}...")
             return GenerateResponseResponse(message=response, reasoning=None, ai_used=True)
         
     except Exception as e:

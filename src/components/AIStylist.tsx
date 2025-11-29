@@ -165,15 +165,43 @@ export default function AIStylist({ wardrobeItems }: AIStylistProps) {
                                                             {outfit.items.map((item) => (
                                                                 <div key={item.id} className="flex-shrink-0">
                                                                     <div
-                                                                        className="w-16 h-16 rounded-lg flex items-center justify-center text-2xl"
+                                                                        className="w-16 h-16 rounded-lg overflow-hidden flex items-center justify-center"
                                                                         style={{ backgroundColor: item.colorHex }}
                                                                     >
-                                                                        {item.category === 'tops' && '👕'}
-                                                                        {item.category === 'bottoms' && '👖'}
-                                                                        {item.category === 'shoes' && '👟'}
-                                                                        {item.category === 'accessories' && '⌚'}
-                                                                        {item.category === 'outerwear' && '🧥'}
-                                                                        {item.category === 'dresses' && '👗'}
+                                                                        {item.imageUrl ? (
+                                                                            <img
+                                                                                src={item.imageUrl}
+                                                                                alt={item.name}
+                                                                                className="w-full h-full object-cover"
+                                                                                onError={(e) => {
+                                                                                    // Fallback to emoji if image fails to load
+                                                                                    const target = e.target as HTMLImageElement;
+                                                                                    target.style.display = 'none';
+                                                                                    const parent = target.parentElement;
+                                                                                    if (parent) {
+                                                                                        parent.innerHTML = `
+                                                                                            <span class="text-2xl">
+                                                                                                ${item.category === 'tops' ? '👕' : ''}
+                                                                                                ${item.category === 'bottoms' ? '👖' : ''}
+                                                                                                ${item.category === 'shoes' ? '👟' : ''}
+                                                                                                ${item.category === 'accessories' ? '⌚' : ''}
+                                                                                                ${item.category === 'outerwear' ? '🧥' : ''}
+                                                                                                ${item.category === 'dresses' ? '👗' : ''}
+                                                                                            </span>
+                                                                                        `;
+                                                                                    }
+                                                                                }}
+                                                                            />
+                                                                        ) : (
+                                                                            <span className="text-2xl">
+                                                                                {item.category === 'tops' && '👕'}
+                                                                                {item.category === 'bottoms' && '👖'}
+                                                                                {item.category === 'shoes' && '👟'}
+                                                                                {item.category === 'accessories' && '⌚'}
+                                                                                {item.category === 'outerwear' && '🧥'}
+                                                                                {item.category === 'dresses' && '👗'}
+                                                                            </span>
+                                                                        )}
                                                                     </div>
                                                                     <p className="text-xs mt-1 text-center truncate w-16">
                                                                         {item.name.split(' ').slice(0, 2).join(' ')}
