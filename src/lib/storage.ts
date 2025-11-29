@@ -5,6 +5,7 @@ const STORAGE_KEYS = {
     PROFILE: 'fitprint:profile',
     CHAT_HISTORY: 'fitprint:chat:history',
     CACHE_METADATA: 'fitprint:cache:metadata',
+    RECYCLE_BIN: 'fitprint:recycle:bin',
 } as const;
 
 // Wardrobe Items Storage
@@ -27,9 +28,30 @@ export function getItems(): WardrobeItem[] {
     try {
         const stored = localStorage.getItem(STORAGE_KEYS.WARDROBE_ITEMS);
         if (!stored) return [];
-        return JSON.parse(stored) as WardrobeItem[];
+        const items = JSON.parse(stored) as WardrobeItem[];
+        // Filter out deleted items (only show active items)
+        return items.filter(item => !item.deletedAt);
     } catch (error) {
         console.error('Error loading wardrobe items:', error);
+        return [];
+    }
+}
+
+export function getDeletedItems(): WardrobeItem[] {
+    if (typeof window === 'undefined') return [];
+
+    try {
+        const stored = localStorage.getItem(STORAGE_KEYS.WARDROBE_ITEMS);
+        if (!stored) return [];
+        const items = JSON.parse(stored) as WardrobeItem[];
+        // Return only deleted items
+        return items.filter(item => item.deletedAt).sort((a, b) => {
+            const dateA = a.deletedAt ? new Date(a.deletedAt).getTime() : 0;
+            const dateB = b.deletedAt ? new Date(b.deletedAt).getTime() : 0;
+            return dateB - dateA; // Most recently deleted first
+        });
+    } catch (error) {
+        console.error('Error loading deleted items:', error);
         return [];
     }
 }
@@ -45,9 +67,50 @@ export function updateItem(id: string, updates: Partial<WardrobeItem>): void {
 }
 
 export function deleteItem(id: string): void {
-    const items = getItems();
-    const filtered = items.filter(i => i.id !== id);
-    localStorage.setItem(STORAGE_KEYS.WARDROBE_ITEMS, JSON.stringify(filtered));
+    // Soft delete - move to recycle bin
+    const allItems = getAllItems();
+    const item = allItems.find(i => i.id === id);
+
+    if (item) {
+        item.deletedAt = new Date().toISOString();
+        saveAllItems(allItems);
+    }
+}
+
+export function restoreItem(id: string): void {
+    // Restore from recycle bin
+    const allItems = getAllItems();
+    const item = allItems.find(i => i.id === id);
+
+    if (item) {
+        delete item.deletedAt;
+        saveAllItems(allItems);
+    }
+}
+
+export function permanentDeleteItem(id: string): void {
+    // Permanently delete from recycle bin
+    const allItems = getAllItems();
+    const filtered = allItems.filter(i => i.id !== id);
+    saveAllItems(filtered);
+}
+
+// Internal helper functions
+function getAllItems(): WardrobeItem[] {
+    if (typeof window === 'undefined') return [];
+
+    try {
+        const stored = localStorage.getItem(STORAGE_KEYS.WARDROBE_ITEMS);
+        if (!stored) return [];
+        return JSON.parse(stored) as WardrobeItem[];
+    } catch (error) {
+        console.error('Error loading all wardrobe items:', error);
+        return [];
+    }
+}
+
+function saveAllItems(items: WardrobeItem[]): void {
+    localStorage.setItem(STORAGE_KEYS.WARDROBE_ITEMS, JSON.stringify(items));
 }
 
 export function toggleFavorite(id: string): void {

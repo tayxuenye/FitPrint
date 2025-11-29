@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ImageMetadata } from '@/types';
 
+// Note: Image classification is now done client-side using TensorFlow.js MobileNet
+// This API endpoint provides fallback filename-based extraction
+
 // Color name to hex mapping
 const COLOR_MAP: Record<string, string> = {
     'white': '#FFFFFF',
@@ -65,51 +68,6 @@ const OCCASION_MAP: Record<string, string[]> = {
     'street': ['streetwear'],
     'streetwear': ['streetwear'],
 };
-
-async function extractMetadataWithHuggingFace(imageFile: File): Promise<ImageMetadata | null> {
-    const apiKey = process.env.HUGGINGFACE_API_KEY;
-
-    if (!apiKey) {
-        // Return null if no API key - graceful degradation
-        return null;
-    }
-
-    try {
-        // Convert file to base64
-        const arrayBuffer = await imageFile.arrayBuffer();
-        const base64 = Buffer.from(arrayBuffer).toString('base64');
-
-        // Use a vision model for image classification
-        // Using a general image classification model
-        const response = await fetch(
-            'https://api-inference.huggingface.co/models/google/vit-base-patch16-224',
-            {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${apiKey}`,
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    inputs: base64,
-                }),
-            }
-        );
-
-        if (!response.ok) {
-            throw new Error('Hugging Face API error');
-        }
-
-        const result = await response.json();
-
-        // Parse the result (this is a simplified version)
-        // In a real implementation, you'd use a more sophisticated model
-        // For now, we'll use a fallback approach
-        return null;
-    } catch (error) {
-        console.error('Hugging Face API error:', error);
-        return null;
-    }
-}
 
 // Fallback metadata extraction using heuristics
 function extractMetadataFallback(imageFile: File): ImageMetadata {
@@ -187,13 +145,9 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Try Hugging Face API first
-        let metadata = await extractMetadataWithHuggingFace(imageFile);
-
-        // Fallback to heuristic extraction if API fails
-        if (!metadata) {
-            metadata = extractMetadataFallback(imageFile);
-        }
+        // Image classification is now done client-side using TensorFlow.js
+        // This endpoint provides fallback metadata extraction from filename
+        const metadata = extractMetadataFallback(imageFile);
 
         return NextResponse.json(metadata);
     } catch (error) {

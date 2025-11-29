@@ -4,12 +4,17 @@ import { useState, useEffect, useMemo } from 'react';
 import Navigation from '@/components/Navigation';
 import AIStylist from '@/components/AIStylist';
 import { WardrobeItem, StyleProfile } from '@/types';
-import { getItems } from '@/lib/storage';
+import { getItems, getDeletedItems, restoreItem, permanentDeleteItem } from '@/lib/storage';
+import WardrobeItemCard from '@/components/WardrobeItemCard';
+import ConfirmDialog from '@/components/ConfirmDialog';
 import { calculateStyleProfile } from '@/lib/profile';
 
 export default function ProfilePage() {
     const [items, setItems] = useState<WardrobeItem[]>([]);
     const [profile, setProfile] = useState<StyleProfile | null>(null);
+    const [deletedItems, setDeletedItems] = useState<WardrobeItem[]>([]);
+    const [showRecycleBin, setShowRecycleBin] = useState(false);
+    const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; itemId?: string; itemName?: string; type?: 'single' | 'all' }>({ isOpen: false });
 
     useEffect(() => {
         const storedItems = getItems();
@@ -18,6 +23,8 @@ export default function ProfilePage() {
             const calculatedProfile = calculateStyleProfile(storedItems);
             setProfile(calculatedProfile);
         }
+        const deleted = getDeletedItems();
+        setDeletedItems(deleted);
     }, []);
 
     if (!profile) {
@@ -220,10 +227,118 @@ export default function ProfilePage() {
                         ))}
                     </div>
                 </section>
+
+                {/* Recycle Bin Section */}
+                <section className="mt-6">
+                    <button
+                        onClick={() => setShowRecycleBin(!showRecycleBin)}
+                        className="w-full flex items-center justify-between p-4 rounded-xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors"
+                    >
+                        <div className="flex items-center gap-3">
+                            <span className="text-2xl">🗑️</span>
+                            <div className="text-left">
+                                <h3 className="font-semibold text-zinc-900 dark:text-white">Recycle Bin</h3>
+                                <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                                    {deletedItems.length} deleted item{deletedItems.length !== 1 ? 's' : ''}
+                                </p>
+                            </div>
+                        </div>
+                        <svg
+                            className={`w-5 h-5 text-zinc-400 transition-transform ${showRecycleBin ? 'rotate-180' : ''}`}
+                            fill="none"
+                            stroke="currentColor"
+                            viewBox="0 0 24 24"
+                        >
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                    </button>
+
+                    {showRecycleBin && (
+                        <div className="mt-4 space-y-3">
+                            {deletedItems.length === 0 ? (
+                                <div className="text-center py-8 text-zinc-500 dark:text-zinc-400">
+                                    <p>Recycle bin is empty</p>
+                                </div>
+                            ) : (
+                                <>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        {deletedItems.map((item) => (
+                                            <div key={item.id} className="relative">
+                                                <WardrobeItemCard
+                                                    item={item}
+                                                    showUsage={false}
+                                                />
+                                                <div className="absolute bottom-2 left-2 right-2 flex gap-2">
+                                                    <button
+                                                        onClick={() => {
+                                                            restoreItem(item.id);
+                                                            const storedItems = getItems();
+                                                            setItems(storedItems);
+                                                            if (storedItems.length > 0) {
+                                                                const calculatedProfile = calculateStyleProfile(storedItems);
+                                                                setProfile(calculatedProfile);
+                                                            }
+                                                            setDeletedItems(getDeletedItems());
+                                                        }}
+                                                        className="flex-1 px-3 py-1.5 rounded-lg bg-green-600 text-white text-xs font-medium hover:bg-green-700 transition-colors"
+                                                    >
+                                                        Restore
+                                                    </button>
+                                                    <button
+                                                        onClick={() => {
+                                                            setDeleteConfirm({ isOpen: true, itemId: item.id, itemName: item.name, type: 'single' });
+                                                        }}
+                                                        className="flex-1 px-3 py-1.5 rounded-lg bg-red-600 text-white text-xs font-medium hover:bg-red-700 transition-colors"
+                                                    >
+                                                        Delete
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    {deletedItems.length > 0 && (
+                                        <button
+                                            onClick={() => {
+                                                setDeleteConfirm({ isOpen: true, type: 'all' });
+                                            }}
+                                            className="w-full mt-4 px-4 py-2 rounded-xl bg-red-600 text-white font-medium hover:bg-red-700 transition-colors"
+                                        >
+                                            Empty Recycle Bin
+                                        </button>
+                                    )}
+                                </>
+                            )}
+                        </div>
+                    )}
+                </section>
             </main>
 
             <AIStylist wardrobeItems={items} />
             <Navigation />
+
+            <ConfirmDialog
+                isOpen={deleteConfirm.isOpen}
+                title={deleteConfirm.type === 'all' ? 'Empty Recycle Bin' : 'Permanently Delete Item'}
+                message={
+                    deleteConfirm.type === 'all'
+                        ? `Permanently delete all ${deletedItems.length} items? This cannot be undone.`
+                        : `Permanently delete "${deleteConfirm.itemName}"? This cannot be undone.`
+                }
+                confirmText="Delete"
+                cancelText="Cancel"
+                variant="danger"
+                onConfirm={() => {
+                    if (deleteConfirm.type === 'all') {
+                        deletedItems.forEach(item => permanentDeleteItem(item.id));
+                        setDeletedItems(getDeletedItems());
+                    } else if (deleteConfirm.itemId) {
+                        permanentDeleteItem(deleteConfirm.itemId);
+                        setDeletedItems(getDeletedItems());
+                    }
+                    setDeleteConfirm({ isOpen: false });
+                }}
+                onCancel={() => setDeleteConfirm({ isOpen: false })}
+            />
         </div>
     );
 }

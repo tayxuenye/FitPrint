@@ -1,12 +1,12 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import Navigation from '@/components/Navigation';
 import WardrobeItemCard from '@/components/WardrobeItemCard';
 import AIStylist from '@/components/AIStylist';
 import { WardrobeItem, ImageMetadata } from '@/types';
 import { sampleWardrobeItems, generateId } from '@/lib/wardrobe';
-import { getItems, saveItem, toggleFavorite as toggleFavoriteStorage } from '@/lib/storage';
+import { getItems, saveItem, toggleFavorite as toggleFavoriteStorage, deleteItem as deleteItemStorage } from '@/lib/storage';
 
 const categories = ['all', 'tops', 'bottoms', 'dresses', 'outerwear', 'shoes', 'accessories'] as const;
 type Category = typeof categories[number];
@@ -75,15 +75,17 @@ export default function WardrobePage() {
     }
   }, []);
 
-  // Filter items by category and search
-  const filteredItems = items.filter(item => {
-    const matchesCategory = selectedCategory === 'all' || item.category === selectedCategory;
-    const matchesSearch = debouncedSearchQuery === '' ||
-      item.name.toLowerCase().includes(debouncedSearchQuery.toLowerCase()) ||
-      item.category.toLowerCase().includes(debouncedSearchQuery.toLowerCase()) ||
-      item.color.toLowerCase().includes(debouncedSearchQuery.toLowerCase());
-    return matchesCategory && matchesSearch;
-  });
+  // Filter items by category and search - memoized for performance
+  const filteredItems = useMemo(() => {
+    return items.filter(item => {
+      const matchesCategory = selectedCategory === 'all' || item.category === selectedCategory;
+      const matchesSearch = debouncedSearchQuery === '' ||
+        item.name.toLowerCase().includes(debouncedSearchQuery.toLowerCase()) ||
+        item.category.toLowerCase().includes(debouncedSearchQuery.toLowerCase()) ||
+        item.color.toLowerCase().includes(debouncedSearchQuery.toLowerCase());
+      return matchesCategory && matchesSearch;
+    });
+  }, [items, selectedCategory, debouncedSearchQuery]);
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -109,19 +111,13 @@ export default function WardrobePage() {
     };
     reader.readAsDataURL(file);
 
-    // Call AI autofill API
+    // Use TensorFlow.js for client-side image classification
     setIsUploading(true);
     try {
-      const formData = new FormData();
-      formData.append('image', file);
+      const { classifyClothingImage } = await import('@/lib/imageClassification');
+      const metadata = await classifyClothingImage(file);
 
-      const response = await fetch('/api/upload', {
-        method: 'POST',
-        body: formData,
-      });
-
-      if (response.ok) {
-        const metadata: ImageMetadata = await response.json();
+      if (metadata) {
         setAiMetadata(metadata);
         // Autofill form with AI metadata
         setNewItem({
@@ -133,15 +129,95 @@ export default function WardrobePage() {
           priceSGD: undefined,
         });
       } else {
-        // Graceful degradation - allow manual entry
-        console.warn('AI autofill unavailable, using manual entry');
+        // Fallback to filename-based extraction
+        const fallbackMetadata = extractMetadataFromFilename(file);
+        setAiMetadata(fallbackMetadata);
+        setNewItem({
+          name: fallbackMetadata.suggestedName,
+          category: fallbackMetadata.category,
+          color: fallbackMetadata.color,
+          colorHex: fallbackMetadata.colorHex,
+          occasion: fallbackMetadata.occasion,
+          priceSGD: undefined,
+        });
       }
     } catch (error) {
-      console.error('Error uploading image:', error);
-      // Graceful degradation
+      console.error('Error classifying image:', error);
+      // Fallback to filename-based extraction
+      const fallbackMetadata = extractMetadataFromFilename(file);
+      setAiMetadata(fallbackMetadata);
+      setNewItem({
+        name: fallbackMetadata.suggestedName,
+        category: fallbackMetadata.category,
+        color: fallbackMetadata.color,
+        colorHex: fallbackMetadata.colorHex,
+        occasion: fallbackMetadata.occasion,
+        priceSGD: undefined,
+      });
     } finally {
       setIsUploading(false);
     }
+  };
+
+  // Fallback function for filename-based extraction
+  const extractMetadataFromFilename = (file: File): ImageMetadata => {
+    const fileName = file.name.toLowerCase();
+
+    const colorOptions = [
+      { name: 'White', hex: '#FFFFFF' },
+      { name: 'Black', hex: '#000000' },
+      { name: 'Navy Blue', hex: '#000080' },
+      { name: 'Blue', hex: '#4169E1' },
+      { name: 'Grey', hex: '#808080' },
+      { name: 'Brown', hex: '#8B4513' },
+      { name: 'Khaki', hex: '#C3B091' },
+      { name: 'Red', hex: '#FF0000' },
+      { name: 'Green', hex: '#228B22' },
+      { name: 'Pink', hex: '#FFB6C1' },
+    ];
+
+    const categoryMap: Record<string, 'tops' | 'bottoms' | 'dresses' | 'outerwear' | 'shoes' | 'accessories'> = {
+      'shirt': 'tops', 't-shirt': 'tops', 'top': 'tops', 'blouse': 'tops',
+      'pants': 'bottoms', 'jeans': 'bottoms', 'trousers': 'bottoms',
+      'dress': 'dresses',
+      'jacket': 'outerwear', 'coat': 'outerwear',
+      'shoes': 'shoes', 'sneakers': 'shoes',
+      'watch': 'accessories',
+    };
+
+    let category: ImageMetadata['category'] = 'tops';
+    for (const [key, value] of Object.entries(categoryMap)) {
+      if (fileName.includes(key)) {
+        category = value;
+        break;
+      }
+    }
+
+    let color = 'White';
+    let colorHex = '#FFFFFF';
+    for (const colorOption of colorOptions) {
+      if (fileName.includes(colorOption.name.toLowerCase())) {
+        color = colorOption.name;
+        colorHex = colorOption.hex;
+        break;
+      }
+    }
+
+    const suggestedName = fileName
+      .replace(/\.[^/.]+$/, '')
+      .replace(/[-_]/g, ' ')
+      .split(' ')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(' ') || 'Clothing Item';
+
+    return {
+      suggestedName,
+      category,
+      color,
+      colorHex,
+      occasion: ['casual'],
+      confidence: 0.5,
+    };
   };
 
   const handleAddItem = () => {
@@ -191,10 +267,15 @@ export default function WardrobePage() {
     });
   };
 
-  const handleFavoriteToggle = () => {
+  const handleFavoriteToggle = useCallback(() => {
     // Reload items from storage after favorite toggle
     setItems(getItems());
-  };
+  }, []);
+
+  const handleDeleteItem = useCallback((deletedItem: WardrobeItem) => {
+    deleteItemStorage(deletedItem.id);
+    setItems(getItems());
+  }, []);
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-900">
@@ -251,7 +332,9 @@ export default function WardrobePage() {
               key={item.id}
               item={item}
               showUsage
+              showDelete
               onFavoriteToggle={handleFavoriteToggle}
+              onDelete={handleDeleteItem}
             />
           ))}
         </div>
@@ -286,7 +369,7 @@ export default function WardrobePage() {
               </button>
             </div>
 
-            <div className="p-4 space-y-4">
+            <div className="p-4 space-y-4 pb-24">
               {/* Image Upload */}
               <div>
                 <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">

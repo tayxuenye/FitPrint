@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, memo, useMemo } from 'react';
 import { WardrobeItem } from '@/types';
 import { toggleFavorite } from '@/lib/storage';
 
@@ -9,14 +10,18 @@ interface WardrobeItemCardProps {
   onSelect?: (item: WardrobeItem) => void;
   showUsage?: boolean;
   onFavoriteToggle?: () => void;
+  onDelete?: (item: WardrobeItem) => void;
+  showDelete?: boolean;
 }
 
-export default function WardrobeItemCard({
+function WardrobeItemCard({
   item,
   isSelected = false,
   onSelect,
   showUsage = false,
   onFavoriteToggle,
+  onDelete,
+  showDelete = false,
 }: WardrobeItemCardProps) {
   const handleFavoriteClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -24,9 +29,21 @@ export default function WardrobeItemCard({
     onFavoriteToggle?.();
   };
 
-  const formatDate = (dateString?: string) => {
-    if (!dateString) return 'Never';
-    const date = new Date(dateString);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  const handleDeleteClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setShowDeleteConfirm(true);
+  };
+
+  const handleConfirmDelete = () => {
+    setShowDeleteConfirm(false);
+    onDelete?.(item);
+  };
+
+  const formatDate = useMemo(() => {
+    if (!item.lastWorn) return 'Never';
+    const date = new Date(item.lastWorn);
     const now = new Date();
     const diffTime = Math.abs(now.getTime() - date.getTime());
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
@@ -35,14 +52,12 @@ export default function WardrobeItemCard({
     if (diffDays === 1) return 'Yesterday';
     if (diffDays < 7) return `${diffDays} days ago`;
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  };
+  }, [item.lastWorn]);
 
-  const calculateCostPerWear = () => {
+  const costPerWear = useMemo(() => {
     if (!item.priceSGD || item.usageCount === 0) return null;
     return (item.priceSGD / item.usageCount).toFixed(2);
-  };
-
-  const costPerWear = calculateCostPerWear();
+  }, [item.priceSGD, item.usageCount]);
 
   return (
     <div
@@ -75,6 +90,29 @@ export default function WardrobeItemCard({
           />
         </svg>
       </button>
+
+      {/* Delete Button */}
+      {showDelete && onDelete && (
+        <button
+          onClick={handleDeleteClick}
+          className="absolute top-2 right-2 z-10 p-1.5 rounded-full bg-white/80 dark:bg-zinc-900/80 backdrop-blur-sm hover:bg-red-500 hover:text-white transition-colors"
+          aria-label="Delete item"
+        >
+          <svg
+            className="w-5 h-5 text-zinc-400 dark:text-zinc-500"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+            />
+          </svg>
+        </button>
+      )}
 
       {/* Image or Color Swatch */}
       <div
@@ -132,7 +170,7 @@ export default function WardrobeItemCard({
         {showUsage && (
           <>
             <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
-              Last worn: {formatDate(item.lastWorn)}
+              Last worn: {formatDate}
             </p>
             {costPerWear && (
               <p className="text-xs font-medium text-purple-600 dark:text-purple-400 mt-0.5">
@@ -150,6 +188,41 @@ export default function WardrobeItemCard({
           </svg>
         </div>
       )}
+
+      {showDeleteConfirm && (
+        <div className="absolute inset-0 bg-black/60 z-20 rounded-xl flex items-center justify-center p-3">
+          <div className="bg-white dark:bg-zinc-800 rounded-xl p-3 shadow-xl w-full mx-2">
+            <h3 className="text-xs font-semibold text-zinc-900 dark:text-white mb-1.5">
+              Delete Item
+            </h3>
+            <p className="text-xs text-zinc-600 dark:text-zinc-400 mb-3 break-words line-clamp-2">
+              Delete "{item.name}"? It will be moved to the recycle bin.
+            </p>
+            <div className="flex gap-2">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowDeleteConfirm(false);
+                }}
+                className="flex-1 px-2 py-1.5 rounded-lg bg-zinc-100 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-300 text-xs font-medium hover:bg-zinc-200 dark:hover:bg-zinc-600 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleConfirmDelete();
+                }}
+                className="flex-1 px-2 py-1.5 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-medium transition-colors"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
+export default memo(WardrobeItemCard);

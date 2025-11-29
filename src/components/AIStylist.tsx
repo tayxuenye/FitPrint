@@ -70,29 +70,17 @@ export default function AIStylist({ wardrobeItems }: AIStylistProps) {
         setIsLoading(true);
 
         try {
-            const response = await fetch('/api/chat', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    message: text,
-                    wardrobeItems,
-                    conversationHistory: newMessages.slice(-10), // Last 10 messages for context
-                }),
-            });
-
-            if (!response.ok) {
-                throw new Error('Failed to get response');
-            }
-
-            const data = await response.json();
+            console.log('💬 Sending message to AI:', text);
+            // Use client-side AI (no API calls needed)
+            const { generateAIResponse } = await import('@/lib/aiStylist');
+            const result = await generateAIResponse(text, wardrobeItems, []);
+            console.log('✅ AI response received:', result);
 
             const assistantMessage: ChatMessage = {
                 id: `assistant-${Date.now()}`,
                 role: 'assistant',
-                content: data.message,
-                outfits: data.outfits,
+                content: result.message,
+                outfits: result.outfits,
                 timestamp: new Date().toISOString(),
             };
 
@@ -100,7 +88,7 @@ export default function AIStylist({ wardrobeItems }: AIStylistProps) {
             setMessages(updatedMessages);
             saveChatHistory(updatedMessages);
         } catch (error) {
-            console.error('Error sending message:', error);
+            console.error('Error generating response:', error);
             const errorMessage: ChatMessage = {
                 id: `error-${Date.now()}`,
                 role: 'assistant',

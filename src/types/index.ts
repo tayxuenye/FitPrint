@@ -12,6 +12,7 @@ export interface WardrobeItem {
   isFavorite: boolean;
   aiExtracted: boolean; // Whether metadata was AI-extracted or manual
   createdAt: string; // ISO date string
+  deletedAt?: string; // ISO date string - if present, item is in recycle bin
 }
 
 export interface Outfit {

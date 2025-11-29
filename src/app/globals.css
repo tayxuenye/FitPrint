@@ -81,6 +81,14 @@ body {
     max-width: none !important;
     flex: 1 !important;
   }
+
+  /* Constrain ConfirmDialog modal to iPhone 16 width */
+  div[class*="fixed"][class*="inset-0"][class*="bg-black/50"][class*="z-50"][class*="flex"][class*="items-center"] {
+    width: 393px !important;
+    left: 50% !important;
+    margin-left: -196.5px !important;
+    right: auto !important;
+  }
 }
 
 /* Mobile-first safe area padding for iOS */
